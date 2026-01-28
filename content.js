@@ -1,5 +1,11 @@
 (() => {
   const ML_PER_100_WORDS = 0.57;
+  const OBSERVE_TARGET = document.documentElement;
+  const OBSERVE_OPTIONS = {
+    childList: true,
+    subtree: true,
+    characterData: true
+  };
 
   function getAssistantArticles() {
     return document.querySelectorAll('article[data-turn="assistant"][data-turn-id]');
@@ -79,14 +85,19 @@
     else container.appendChild(badge);
   }
 
-  function scanAndUpsert() {
-    const articles = getAssistantArticles();
-    for (const article of articles) upsertBadgeForArticle(article);
-  }
-
   // Prevent double-initialization if the script is injected twice.
   if (window.__waterBadgeInitialized) return;
   window.__waterBadgeInitialized = true;
+
+  const observer = new MutationObserver(() => scheduleScan());
+
+  function scanAndUpsert() {
+    // Avoid feedback loops: our own badge inserts create DOM mutations.
+    observer.disconnect();
+    const articles = getAssistantArticles();
+    for (const article of articles) upsertBadgeForArticle(article);
+    observer.observe(OBSERVE_TARGET, OBSERVE_OPTIONS);
+  }
 
   // MVP performance: scan on every mutation, lightly debounced.
   let scheduled = false;
@@ -101,11 +112,5 @@
 
   scanAndUpsert();
 
-  const observer = new MutationObserver(() => scheduleScan());
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    characterData: true
-  });
+  observer.observe(OBSERVE_TARGET, OBSERVE_OPTIONS);
 })();
