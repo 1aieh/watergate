@@ -339,38 +339,49 @@
     activePopoverForKey = null;
   }
 
-  function buildPopoverText({ model, wordCount, waterMl, mlPer100Words }) {
-    const modelName = model?.displayName ? `${model.displayName}` : "Unknown model";
-    const provider = model?.provider ? ` (${model.provider})` : "";
-    const wc = typeof wordCount === "number" && Number.isFinite(wordCount) ? wordCount : null;
-    const ml = typeof waterMl === "number" && Number.isFinite(waterMl) ? waterMl : null;
-    const m = typeof mlPer100Words === "number" && Number.isFinite(mlPer100Words) ? mlPer100Words : null;
+  function fmtMlPer100(v) {
+    if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+    return `${v.toFixed(2)} mL / 100 words`;
+  }
 
+  function fmtWaterMl(v) {
+    if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+    return `~${v.toFixed(2)} mL`;
+  }
+
+  function toFiniteNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (typeof text === "string") node.textContent = text;
+    return node;
+  }
+
+  function buildDetailsLines(model) {
+    if (!model) return [];
     const lines = [];
-    lines.push(`You are using ${modelName}${provider}.`);
-    if (model?.basis) lines.push(`This estimate is based on: ${model.basis}.`);
-    lines.push("");
-    lines.push("Common normalization: milliliters (mL) per ~100 words");
-    if (m != null) lines.push(`Value used: ${m.toFixed(2)} mL / 100 words`);
-    lines.push("Formula:");
-    if (m != null) lines.push(`(response word count ÷ 100) × ${m.toFixed(2)}`);
-    else lines.push("(response word count ÷ 100) × (mL per 100 words)");
-
-    if (wc != null && m != null) {
-      const computed = calcWaterMl(wc, m);
-      lines.push("");
-      lines.push(`This response: ${wc} words → ${(wc / 100).toFixed(2)} × ${m.toFixed(2)} = ${(computed ?? ml ?? 0).toFixed(2)} mL`);
+    if (model.basis) lines.push({ label: "Basis", value: model.basis });
+    if (model.originalMetric) lines.push({ label: "Original metric", value: model.originalMetric });
+    if (model.normalization) lines.push({ label: "Normalization", value: model.normalization });
+    if (typeof model.mlPer100Words === "number" && Number.isFinite(model.mlPer100Words)) {
+      lines.push({ label: "Value used", value: fmtMlPer100(model.mlPer100Words) });
     }
+    if (model.valueRationale) lines.push({ label: "Why this value", value: model.valueRationale });
+    return lines;
+  }
 
-    lines.push("");
-    if (model?.explanationText) {
-      lines.push("Details:");
-      lines.push(model.explanationText);
-    } else {
-      lines.push("Details: Water estimate unavailable.");
+  function buildAssumptionsText(model) {
+    if (!model) return null;
+    const parts = [];
+    if (Array.isArray(model.assumptions) && model.assumptions.length) {
+      parts.push(...model.assumptions.map((a) => `- ${a}`));
     }
-
-    return lines.join("\n");
+    if (model.note) parts.push(`Note: ${model.note}`);
+    return parts.length ? parts.join("\n") : null;
   }
 
   function positionPopover(popoverEl, anchorEl) {
@@ -412,9 +423,14 @@
     const modelId = badgeEl.getAttribute("data-model-id");
     const model = WM?.MODEL_REGISTRY ? WM.MODEL_REGISTRY[modelId] : null;
 
-    const wordCount = Number(badgeEl.getAttribute("data-word-count"));
-    const waterMl = Number(badgeEl.getAttribute("data-water-ml"));
-    const mlPer100Words = Number(badgeEl.getAttribute("data-ml-per-100-words"));
+    const wordCount = toFiniteNumber(badgeEl.getAttribute("data-word-count"));
+    const waterMl = toFiniteNumber(badgeEl.getAttribute("data-water-ml"));
+    const mlPer100Words = toFiniteNumber(badgeEl.getAttribute("data-ml-per-100-words"));
+
+    const computedWaterMl =
+      wordCount != null && mlPer100Words != null ? calcWaterMl(wordCount, mlPer100Words) : null;
+    const displayWaterMl = computedWaterMl ?? waterMl ?? null;
+    const isUnavailable = badgeEl.getAttribute("data-water-unavailable") === "true" || !model;
 
     const popover = document.createElement("div");
     popover.className = "water-popover";
@@ -423,9 +439,18 @@
     const header = document.createElement("div");
     header.className = "water-popover-header";
 
+    const headerLeft = el("div", "water-popover-header-left");
+
     const title = document.createElement("div");
     title.className = "water-popover-title";
     title.textContent = "Water estimate";
+
+    const meta = el("div", "water-popover-meta");
+    const modelLabel = model?.displayName
+      ? `${model.displayName}${model?.provider ? ` (${model.provider})` : ""}`
+      : "Unknown model";
+    meta.appendChild(el("span", "water-chip", modelLabel));
+    if (mlPer100Words != null) meta.appendChild(el("span", "water-chip is-accent", fmtMlPer100(mlPer100Words)));
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "water-popover-close";
@@ -438,17 +463,114 @@
       closePopover();
     });
 
-    header.appendChild(title);
+    headerLeft.appendChild(title);
+    headerLeft.appendChild(meta);
+    header.appendChild(headerLeft);
     header.appendChild(closeBtn);
 
     const body = document.createElement("div");
     body.className = "water-popover-body";
-    body.textContent = buildPopoverText({
-      model,
-      wordCount: Number.isFinite(wordCount) ? wordCount : null,
-      waterMl: Number.isFinite(waterMl) ? waterMl : null,
-      mlPer100Words: Number.isFinite(mlPer100Words) ? mlPer100Words : null
-    });
+
+    // Hero
+    const hero = el("div", "water-hero");
+    hero.appendChild(el("div", "water-kicker", "This response used"));
+    hero.appendChild(
+      el("div", "water-value", isUnavailable ? "Water estimate unavailable" : fmtWaterMl(displayWaterMl))
+    );
+
+    const subParts = [];
+    if (wordCount != null) subParts.push(`${wordCount.toFixed(0)} words`);
+    if (mlPer100Words != null) subParts.push(`normalized at ${fmtMlPer100(mlPer100Words)}`);
+    hero.appendChild(
+      el(
+        "div",
+        "water-sub",
+        subParts.length ? subParts.join(" • ") : "Generate a response to see the per-response estimate."
+      )
+    );
+    body.appendChild(hero);
+
+    // Key facts
+    const facts = el("div", "water-facts");
+    const addFact = (label, value) => {
+      const row = el("div", "water-fact");
+      row.appendChild(el("div", "water-fact-label", label));
+      row.appendChild(el("div", "water-fact-value", value));
+      facts.appendChild(row);
+    };
+    addFact("Site", window.location.hostname);
+    addFact("Model", modelLabel);
+    if (model?.basis) addFact("Estimate basis", model.basis);
+    body.appendChild(facts);
+
+    // Calculation
+    const calcSection = el("div", "water-section");
+    calcSection.appendChild(el("div", "water-section-title", "Calculation"));
+    const calcCard = el("div", "water-card");
+    const formula =
+      mlPer100Words != null ? `(response word count ÷ 100) × ${mlPer100Words.toFixed(2)}` : "(response word count ÷ 100) × (mL per 100 words)";
+    calcCard.appendChild(el("div", "water-mono", `Formula: ${formula}`));
+    if (wordCount != null && mlPer100Words != null && displayWaterMl != null) {
+      const blocks = wordCount / 100;
+      calcCard.appendChild(
+        el(
+          "div",
+          "water-mono",
+          [
+            `${wordCount.toFixed(0)} words ÷ 100 = ${blocks.toFixed(2)}`,
+            `${blocks.toFixed(2)} × ${mlPer100Words.toFixed(2)} = ${displayWaterMl.toFixed(2)} mL`
+          ].join("\n")
+        )
+      );
+    }
+    calcSection.appendChild(calcCard);
+    body.appendChild(calcSection);
+
+    // Details (progressive disclosure)
+    const detailsSection = el("div", "water-section");
+    detailsSection.appendChild(el("div", "water-section-title", "Details"));
+
+    const detailsLines = buildDetailsLines(model);
+    if (detailsLines.length) {
+      const dl = el("div", "water-dl");
+      for (const line of detailsLines) {
+        const row = el("div", "water-dl-row");
+        row.appendChild(el("div", "water-dt", line.label));
+        row.appendChild(el("div", "water-dd", line.value));
+        dl.appendChild(row);
+      }
+      detailsSection.appendChild(dl);
+    } else {
+      detailsSection.appendChild(el("div", "water-muted", "Open a supported chat page to see model-specific details."));
+    }
+
+    const assumptionsText = buildAssumptionsText(model);
+    if (assumptionsText) {
+      const details = document.createElement("details");
+      details.className = "water-details";
+      const summary = document.createElement("summary");
+      summary.textContent = "Assumptions & notes";
+      const pre = el("pre", "water-pre", assumptionsText);
+      details.appendChild(summary);
+      details.appendChild(pre);
+      detailsSection.appendChild(details);
+    }
+
+    if (model?.explanationText) {
+      const details = document.createElement("details");
+      details.className = "water-details";
+      const summary = document.createElement("summary");
+      summary.textContent = "Full model breakdown";
+      const pre = el("pre", "water-pre", model.explanationText);
+      details.appendChild(summary);
+      details.appendChild(pre);
+      detailsSection.appendChild(details);
+    }
+
+    const footer = el("div", "water-footnote", "Reflective system, not a guilt meter.");
+    detailsSection.appendChild(footer);
+
+    body.appendChild(detailsSection);
 
     popover.appendChild(header);
     popover.appendChild(body);
