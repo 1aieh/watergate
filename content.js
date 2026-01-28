@@ -36,6 +36,32 @@
     return "Water estimate unavailable";
   }
 
+  function setBadgeContent(badgeEl, { waterMl, isUnavailable }) {
+    if (!badgeEl) return;
+
+    // Clear existing contents (safe; we use data attributes for state).
+    badgeEl.textContent = "";
+
+    if (isUnavailable || typeof waterMl !== "number" || !Number.isFinite(waterMl)) {
+      const span = document.createElement("span");
+      span.className = "water-badge-unavailable";
+      span.textContent = "Water estimate unavailable";
+      badgeEl.appendChild(span);
+      return;
+    }
+
+    const prefix = document.createElement("span");
+    prefix.className = "water-badge-prefix";
+    prefix.textContent = "This response used ";
+
+    const amount = document.createElement("span");
+    amount.className = "water-badge-amount";
+    amount.textContent = `~${waterMl.toFixed(2)} mL of water`;
+
+    badgeEl.appendChild(prefix);
+    badgeEl.appendChild(amount);
+  }
+
   let generatedKeyCounter = 0;
   function ensureStableKeyForElement(el, prefix) {
     if (!el) return null;
@@ -76,12 +102,9 @@
     const existingInHost = hostEl.querySelector(`.water-badge[data-water-key="${safeKey}"]`);
     const existingAnywhere = document.querySelector(`.water-badge[data-water-key="${safeKey}"]`);
     const existing = existingInHost || existingAnywhere;
-    const displayText = formatBadgeText({ waterMl, isUnavailable });
 
     if (existing) {
-      const strong = existing.querySelector("strong");
-      if (strong) strong.textContent = displayText;
-      else existing.textContent = displayText;
+      setBadgeContent(existing, { waterMl, isUnavailable });
       existing.setAttribute("data-word-count", String(wordCount));
       if (typeof waterMl === "number" && Number.isFinite(waterMl))
         existing.setAttribute("data-water-ml", String(waterMl));
@@ -142,9 +165,7 @@
     badge.setAttribute("role", "button");
     badge.setAttribute("tabindex", "0");
 
-    const strong = document.createElement("strong");
-    strong.textContent = displayText;
-    badge.appendChild(strong);
+    setBadgeContent(badge, { waterMl, isUnavailable });
 
     // Always anchor to the host container and keep it at the bottom.
     hostEl.appendChild(badge);
