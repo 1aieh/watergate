@@ -70,7 +70,12 @@
     if (!key || !hostEl) return;
 
     const safeKey = escapeAttrValue(key);
-    const existing = hostEl.querySelector(`.water-badge[data-water-key="${safeKey}"]`);
+    // Prefer a badge inside the host container.
+    // (On some sites, streaming can temporarily change the preferred anchor element;
+    // anchoring to the host container prevents duplicates.)
+    const existingInHost = hostEl.querySelector(`.water-badge[data-water-key="${safeKey}"]`);
+    const existingAnywhere = document.querySelector(`.water-badge[data-water-key="${safeKey}"]`);
+    const existing = existingInHost || existingAnywhere;
     const displayText = formatBadgeText({ waterMl, isUnavailable });
 
     if (existing) {
@@ -87,6 +92,35 @@
       if (provider) existing.setAttribute("data-model-provider", String(provider));
       if (typeof mlPer100Words === "number" && Number.isFinite(mlPer100Words))
         existing.setAttribute("data-ml-per-100-words", String(mlPer100Words));
+
+      // Ensure the badge lives inside the host container and appears at the bottom.
+      if (existing.parentElement !== hostEl) {
+        try {
+          hostEl.appendChild(existing);
+        } catch (_) {
+          // ignore
+        }
+      } else {
+        // Move to end to keep it at the bottom of the response block.
+        try {
+          hostEl.appendChild(existing);
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      // Remove any duplicate badges with the same key elsewhere (can happen during streaming).
+      const dupes = document.querySelectorAll(`.water-badge[data-water-key="${safeKey}"]`);
+      if (dupes && dupes.length > 1) {
+        for (const el of dupes) {
+          if (el === existing) continue;
+          try {
+            el.remove();
+          } catch (_) {
+            // ignore
+          }
+        }
+      }
       return;
     }
 
@@ -112,16 +146,21 @@
     strong.textContent = displayText;
     badge.appendChild(strong);
 
-    // Preferred: insert immediately after the anchor content node.
-    if (anchorEl && anchorEl.insertAdjacentElement) {
-      try {
-        anchorEl.insertAdjacentElement("afterend", badge);
-        return;
-      } catch (_) {
-        // Fall through to append.
-      }
-    }
+    // Always anchor to the host container and keep it at the bottom.
     hostEl.appendChild(badge);
+
+    // Direct event handlers (more reliable than delegation on heavily scripted pages).
+    badge.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openPopoverForBadge(badge);
+    });
+    badge.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      e.stopPropagation();
+      openPopoverForBadge(badge);
+    });
   }
 
   function getHostnameAdapter() {
@@ -247,6 +286,43 @@
   if (!adapter) return;
 
   const observer = new MutationObserver(() => scheduleScan());
+
+  function getLatestBadgeSnapshot() {
+    const badges = document.querySelectorAll(".water-badge[data-water-badge='true']");
+    if (!badges || !badges.length) return null;
+    const last = badges[badges.length - 1];
+
+    const modelId = last.getAttribute("data-model-id") || null;
+    const model = WM?.MODEL_REGISTRY && modelId ? WM.MODEL_REGISTRY[modelId] : null;
+
+    const wordCount = Number(last.getAttribute("data-word-count"));
+    const waterMl = Number(last.getAttribute("data-water-ml"));
+    const mlPer100Words = Number(last.getAttribute("data-ml-per-100-words"));
+
+    return {
+      modelId,
+      modelDisplayName: model?.displayName || last.getAttribute("data-model-name") || null,
+      provider: model?.provider || last.getAttribute("data-model-provider") || null,
+      wordCount: Number.isFinite(wordCount) ? wordCount : null,
+      waterMl: Number.isFinite(waterMl) ? waterMl : null,
+      mlPer100Words: Number.isFinite(mlPer100Words) ? mlPer100Words : null
+    };
+  }
+
+  // Allow the extension popup to request the latest on-page estimate.
+  if (typeof chrome !== "undefined" && chrome?.runtime?.onMessage?.addListener) {
+    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+      if (!msg || msg.type !== "WATERGATE_GET_LATEST") return;
+      const snap = getLatestBadgeSnapshot();
+      sendResponse({
+        ok: true,
+        hostname: window.location.hostname,
+        adapter: adapter?.name || null,
+        latest: snap
+      });
+      return true;
+    });
+  }
 
   // --- Badge popover (transparent explanation UI) ---
   let activePopover = null;

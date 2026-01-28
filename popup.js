@@ -8,6 +8,12 @@
   const currentPillEl = document.getElementById("currentPill");
   const currentCompareEl = document.getElementById("currentCompare");
   const modelListEl = document.getElementById("modelList");
+  const headlineWaterEl = document.getElementById("headlineWater");
+  const headlineSubEl = document.getElementById("headlineSub");
+  const calcStepsEl = document.getElementById("calcSteps");
+  const modelChartEl = document.getElementById("modelChart");
+  const detailsBasisEl = document.getElementById("detailsBasis");
+  const detailsAssumptionsEl = document.getElementById("detailsAssumptions");
 
   function safeText(el, text) {
     if (!el) return;
@@ -17,6 +23,11 @@
   function formatMl(v) {
     if (typeof v !== "number" || !Number.isFinite(v)) return "—";
     return `${v.toFixed(2)} mL / 100 words`;
+  }
+
+  function formatWaterMl(v) {
+    if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+    return `~${v.toFixed(2)} mL`;
   }
 
   function mean(values) {
@@ -85,7 +96,7 @@
 
       const details = document.createElement("details");
       const summary = document.createElement("summary");
-      summary.textContent = "Calculation explanation";
+      summary.textContent = "Estimate details";
       const pre = document.createElement("pre");
       pre.textContent = m.explanationText || "Water estimate unavailable.";
       details.appendChild(summary);
@@ -97,7 +108,87 @@
     }
   }
 
-  function renderCurrent({ hostname, modelId }) {
+  function renderModelChart({ wordCount, currentModelId }) {
+    if (!modelChartEl) return;
+    modelChartEl.innerHTML = "";
+
+    const models = Object.values(WM.MODEL_REGISTRY || {}).slice();
+    const wc = typeof wordCount === "number" && Number.isFinite(wordCount) ? wordCount : null;
+    if (!models.length || wc == null) {
+      const empty = document.createElement("div");
+      empty.className = "muted small";
+      empty.textContent = "No response detected on this page yet.";
+      modelChartEl.appendChild(empty);
+      return;
+    }
+
+    const rows = models
+      .map((m) => {
+        const w = WM.calcWaterMl ? WM.calcWaterMl(wc, m.mlPer100Words) : null;
+        return { model: m, waterMl: w };
+      })
+      .filter((r) => typeof r.waterMl === "number" && Number.isFinite(r.waterMl));
+
+    const max = Math.max(...rows.map((r) => r.waterMl));
+    for (const r of rows) {
+      const row = document.createElement("div");
+      row.className = "chart-row";
+      if (r.model.id === currentModelId) row.classList.add("is-current");
+
+      const name = document.createElement("div");
+      name.className = "chart-name";
+      name.textContent = r.model.displayName || r.model.id;
+
+      const bar = document.createElement("div");
+      bar.className = "chart-bar";
+      const fill = document.createElement("span");
+      const pct = max > 0 ? Math.max(0.03, r.waterMl / max) * 100 : 0;
+      fill.style.width = `${Math.min(100, pct).toFixed(1)}%`;
+      bar.appendChild(fill);
+
+      const value = document.createElement("div");
+      value.className = "chart-value";
+      value.textContent = `~${r.waterMl.toFixed(2)} mL`;
+
+      row.appendChild(name);
+      row.appendChild(bar);
+      row.appendChild(value);
+      modelChartEl.appendChild(row);
+    }
+  }
+
+  function renderDetails({ model }) {
+    if (!model) {
+      safeText(detailsBasisEl, "Open an AI chat page to see model-specific details.");
+      safeText(detailsAssumptionsEl, "—");
+      return;
+    }
+
+    const basisLines = [];
+    if (model.basis) basisLines.push(`Basis: ${model.basis}`);
+    if (model.originalMetric) basisLines.push(`Original metric: ${model.originalMetric}`);
+    if (model.normalization) basisLines.push(`Normalization: ${model.normalization}`);
+    if (typeof model.mlPer100Words === "number" && Number.isFinite(model.mlPer100Words)) {
+      basisLines.push(`Value used: ${model.mlPer100Words.toFixed(2)} mL / 100 words`);
+    }
+    safeText(detailsBasisEl, basisLines.filter(Boolean).join("\n") || "—");
+
+    const assumptionsLines = [];
+    if (Array.isArray(model.assumptions) && model.assumptions.length) {
+      assumptionsLines.push("Assumptions:");
+      for (const a of model.assumptions) assumptionsLines.push(`- ${a}`);
+    }
+    if (model.note) assumptionsLines.push(`Note: ${model.note}`);
+    safeText(detailsAssumptionsEl, assumptionsLines.filter(Boolean).join("\n") || "No additional assumptions listed.");
+  }
+
+  function renderCurrent({
+    hostname,
+    modelId,
+    latestWordCount,
+    latestWaterMl,
+    latestMlPer100Words
+  }) {
     const model = modelId ? WM.MODEL_REGISTRY[modelId] : null;
 
     safeText(currentSiteEl, hostname ? hostname : "Unsupported / unknown site");
@@ -108,34 +199,65 @@
     safeText(currentMetaEl, model ? model.basis || "" : "");
     safeText(currentPillEl, model ? formatMl(model.mlPer100Words) : "—");
 
-    const allValues = Object.values(WM.MODEL_REGISTRY || {}).map((m) => m.mlPer100Words);
+    const wc = typeof latestWordCount === "number" && Number.isFinite(latestWordCount) ? latestWordCount : null;
+    const ml = typeof latestWaterMl === "number" && Number.isFinite(latestWaterMl) ? latestWaterMl : null;
+    const m = typeof latestMlPer100Words === "number" && Number.isFinite(latestMlPer100Words) ? latestMlPer100Words : null;
+
+    safeText(headlineWaterEl, ml != null ? formatWaterMl(ml) : "—");
+    safeText(headlineSubEl, wc != null ? `${wc.toFixed(0)} words • normalized at ${m != null ? `${m.toFixed(2)} mL / 100 words` : "—"}` : "No response detected yet.");
+
+    if (wc != null && m != null && ml != null) {
+      const blocks = wc / 100;
+      safeText(
+        calcStepsEl,
+        [
+          `${wc.toFixed(0)} words ÷ 100 words = ${blocks.toFixed(2)} (hundreds of words)`,
+          `${blocks.toFixed(2)} × ${m.toFixed(2)} (mL per 100 words) = ${ml.toFixed(2)} mL`
+        ].join("\n")
+      );
+    } else {
+      safeText(calcStepsEl, "Open a chat page and generate a response to see the per-response calculation.");
+    }
+
+    const allValues = Object.values(WM.MODEL_REGISTRY || {}).map((m2) => m2.mlPer100Words);
     const avg = mean(allValues);
     if (!model || avg == null) {
       safeText(currentCompareEl, "");
-      return;
+    } else {
+      const diff = percentDiff(model.mlPer100Words, avg);
+      const diffText =
+        diff == null
+          ? ""
+          : diff >= 0
+            ? `${diff.toFixed(0)}% higher than the system average`
+            : `${Math.abs(diff).toFixed(0)}% lower than the system average`;
+
+      const min = Math.min(...allValues.filter((v) => typeof v === "number" && Number.isFinite(v)));
+      const max = Math.max(...allValues.filter((v) => typeof v === "number" && Number.isFinite(v)));
+      const rangeText =
+        Number.isFinite(min) && Number.isFinite(max)
+          ? `System range: ${min.toFixed(2)}–${max.toFixed(2)} mL / 100 words`
+          : "";
+      safeText(currentCompareEl, [diffText, rangeText].filter(Boolean).join(" • "));
     }
 
-    const diff = percentDiff(model.mlPer100Words, avg);
-    const diffText =
-      diff == null
-        ? ""
-        : diff >= 0
-          ? `${diff.toFixed(0)}% higher than the system average`
-          : `${Math.abs(diff).toFixed(0)}% lower than the system average`;
-
-    const min = Math.min(...allValues.filter((v) => typeof v === "number" && Number.isFinite(v)));
-    const max = Math.max(...allValues.filter((v) => typeof v === "number" && Number.isFinite(v)));
-    const rangeText =
-      Number.isFinite(min) && Number.isFinite(max)
-        ? `System range: ${min.toFixed(2)}–${max.toFixed(2)} mL / 100 words`
-        : "";
-
-    safeText(currentCompareEl, [diffText, rangeText].filter(Boolean).join(" • "));
+    renderModelChart({ wordCount: wc, currentModelId: modelId });
+    renderDetails({ model });
   }
 
   function getHostnameFromUrl(url) {
     try {
       return new URL(url).hostname;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function getLatestFromPage(tabId) {
+    try {
+      const resp = await chrome.tabs.sendMessage(tabId, { type: "WATERGATE_GET_LATEST" });
+      if (!resp || resp.ok !== true) return null;
+      return resp;
     } catch (_) {
       return null;
     }
@@ -152,7 +274,18 @@
     const hostname = tab?.url ? getHostnameFromUrl(tab.url) : null;
     const modelId = hostname ? WM.SITE_DEFAULT_MODEL[hostname] : null;
 
-    renderCurrent({ hostname, modelId });
+    const latest = tab?.id ? await getLatestFromPage(tab.id) : null;
+    const latestWordCount = latest?.latest?.wordCount ?? null;
+    const latestWaterMl = latest?.latest?.waterMl ?? null;
+    const latestMlPer100Words = latest?.latest?.mlPer100Words ?? (modelId ? WM.MODEL_REGISTRY[modelId]?.mlPer100Words : null);
+
+    renderCurrent({
+      hostname,
+      modelId,
+      latestWordCount,
+      latestWaterMl,
+      latestMlPer100Words
+    });
     renderModelList({ currentModelId: modelId });
   }
 

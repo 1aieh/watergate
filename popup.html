@@ -15,27 +15,60 @@
         </div>
       </header>
 
-      <section class="card" id="currentCard">
-        <div class="card-title">Current site</div>
-        <div class="muted" id="currentSite">Detecting…</div>
-        <div class="spacer"></div>
-        <div class="current-row">
-          <div>
+      <section class="card" id="summaryCard">
+        <div class="card-title">At a glance</div>
+
+        <div class="summary-top">
+          <div class="summary-site">
+            <div class="muted small" id="currentSite">Detecting…</div>
             <div class="current-model" id="currentModel">—</div>
-            <div class="muted" id="currentMeta">—</div>
+            <div class="muted small" id="currentMeta">—</div>
           </div>
           <div class="pill" id="currentPill">—</div>
         </div>
+
+        <div class="spacer"></div>
+
+        <div class="headline">
+          <div class="headline-label muted small">This response used</div>
+          <div class="headline-value" id="headlineWater">—</div>
+          <div class="headline-sub muted small" id="headlineSub">—</div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="calc">
+          <div class="calc-title">Calculation (units)</div>
+          <div class="calc-steps mono" id="calcSteps">—</div>
+        </div>
+
         <div class="spacer"></div>
         <div class="muted small" id="currentCompare"></div>
       </section>
 
-      <section class="card">
-        <div class="card-title">Comparison (all models in this system)</div>
-        <div class="muted small">
-          Formula used everywhere: <span class="mono">water_mL = (word_count / 100) × mL_per_100_words</span>
+      <section class="card" id="comparisonCard">
+        <div class="card-title">Same response, 3 models</div>
+        <div class="muted small">Using the same word count, here’s what each model would estimate.</div>
+        <div class="spacer"></div>
+        <div class="chart" id="modelChart"></div>
+      </section>
+
+      <section class="card" id="detailsCard">
+        <div class="card-title">Details</div>
+        <div class="details-stack">
+          <details open>
+            <summary>What these estimates are based on</summary>
+            <div class="details-body" id="detailsBasis">—</div>
+          </details>
+          <details>
+            <summary>Assumptions & notes (current model)</summary>
+            <div class="details-body" id="detailsAssumptions">—</div>
+          </details>
+          <details>
+            <summary>All model details</summary>
+            <div class="list" id="modelList"></div>
+          </details>
         </div>
-        <div class="list" id="modelList"></div>
       </section>
 
       <footer class="footer muted small">

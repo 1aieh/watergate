@@ -82,9 +82,7 @@
       `Estimate basis: ${model.basis}`,
       `Original metric: ${model.originalMetric}`,
       `Normalization: ${model.normalization}`,
-      `Value used: ${Number(model.mlPer100Words).toFixed(2)} mL / 100 words${model.valueRationale ? ` (${model.valueRationale})` : ""}`,
-      "Formula:",
-      model.formulaText
+      `Value used: ${Number(model.mlPer100Words).toFixed(2)} mL / 100 words${model.valueRationale ? ` (${model.valueRationale})` : ""}`
     ];
     if (Array.isArray(model.assumptions) && model.assumptions.length) {
       lines.push("Assumptions:");
