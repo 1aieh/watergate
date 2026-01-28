@@ -1,0 +1,20 @@
+.water-badge {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(0, 0, 0, 0.75);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .water-badge {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.78);
+  }
+}
+

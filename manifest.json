@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Watergate (ChatGPT water badge)",
+  "version": "0.0.1",
+  "description": "Shows an estimated water usage badge under each ChatGPT assistant response.",
+  "host_permissions": ["https://chatgpt.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
