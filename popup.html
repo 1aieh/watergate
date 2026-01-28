@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Watergate</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <div class="brand">
+          <div class="brand-title">Watergate</div>
+          <div class="brand-subtitle">Transparent water estimate (mL / 100 words)</div>
+        </div>
+      </header>
+
+      <section class="card" id="currentCard">
+        <div class="card-title">Current site</div>
+        <div class="muted" id="currentSite">Detecting…</div>
+        <div class="spacer"></div>
+        <div class="current-row">
+          <div>
+            <div class="current-model" id="currentModel">—</div>
+            <div class="muted" id="currentMeta">—</div>
+          </div>
+          <div class="pill" id="currentPill">—</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="muted small" id="currentCompare"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Comparison (all models in this system)</div>
+        <div class="muted small">
+          Formula used everywhere: <span class="mono">water_mL = (word_count / 100) × mL_per_100_words</span>
+        </div>
+        <div class="list" id="modelList"></div>
+      </section>
+
+      <footer class="footer muted small">
+        This is a reflective system, not a guilt meter.
+      </footer>
+    </main>
+
+    <script src="water-models.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

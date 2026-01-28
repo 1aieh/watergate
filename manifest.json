@@ -3,11 +3,15 @@
   "name": "Watergate (AI water badge)",
   "version": "0.0.1",
   "description": "Shows an estimated water usage badge under each AI assistant response.",
+  "permissions": ["tabs"],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*"],
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*"],
-      "js": ["content.js"],
+      "js": ["water-models.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }
